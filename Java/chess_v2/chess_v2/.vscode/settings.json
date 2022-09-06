@@ -1,0 +1,8 @@
+{
+    "java.project.sourcePaths": ["src"],
+    "java.project.outputPath": "bin",
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar",
+        "c:\\Users\\tonka\\OneDrive\\Documents\\Coding Projects\\Java\\chess_v2\\guava-31.1-jre.jar"
+    ]
+}

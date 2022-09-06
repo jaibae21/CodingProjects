@@ -1,0 +1,31 @@
+######################################################################################
+# Author: Jaiden
+# Notes: Commands here are not used and are just a template for now
+#unsure how to override default help from a cog
+######################################################################################
+import discord
+from discord.ext import commands
+
+class help(commands.Cog):
+
+	def __init__(self, bot):
+		self.bot = bot
+	
+	commands.command()
+	async def send_bot_help(self, mapping):
+		return await bot.send_bot_help(mapping)
+
+	commands.command()
+	async def send_cog_help(self,cog):
+		return await bot.send_cog_help(cog)
+
+	commands.command()
+	async def send_group_help(self, group):
+		return await bot.send_group_help(group)
+
+	commands.command()
+	async def send_command_help(self, command):
+		return await bot.send_command_help(command)
+
+def setup(bot):
+	bot.add_cog(help(bot))
