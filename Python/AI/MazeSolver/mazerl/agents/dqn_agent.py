@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 import numpy as np
 import torch
-import torch.nn.functional as f
+import torch.nn.functional as F
 from .base_agent import BaseAgent
 from .networks import DQNNet
 from .replay_buffer import ReplayBuffer
@@ -75,4 +75,33 @@ class DQNAgent(BaseAgent):
         r = torch.tensor(r, dtype=torch.float32, device=self.device)
         s2 = torch.tensor(s2, dtype=torch.float32, device=self.device)
         d = torch.tensor(d, dtype=torch.float32, device=self.device)
+
+        # Q(s,a)
+        q_values = self.policy(s).gather(1, a)
+
+        # y = r + gamma * max_a' Q_target(s',a') * (1 - done)
+        with torch.no_grad():
+            next_q = self.target(s2).max(dim=1, keepdim=True)[0]
+            target = r + self.cfg.gamma * next_q * (1.0 -d)
         
+        # Huber loss (smooth L1) is robust to outliers vs MSE
+        loss = F.smooth_l1_loss(q_values, target, beta=self.cfg.huber_delta)
+
+        self.optim.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 10.0)
+        self.optim.step()
+
+    def save(self, path: str):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save({
+            "model": self.policy.state_dict(),
+            "cfg": vars(self.cfg),
+            "step": self.global_step,
+        }, path)
+
+    def load(self, path: str):
+        ckpt = torch.load(path, map_location=self.device)
+        self.policy.load_state_dict(ckpt["model"])
+        self.target.load_state_dict(ckpt["model"])
+        self.global_step = ckpt.get("step", 0)
