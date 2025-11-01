@@ -1,0 +1,123 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// Student Structure
+type Student struct {
+	firstName string
+	lastName  string
+	tests     []float64
+	homework  []float64
+}
+
+// Read file function
+func readFile(fileName string) ([]Student, error) {
+	var inFile *os.File
+	var estat error
+	inFile, estat = os.Open(fileName)
+	if estat != nil {
+		fmt.Println("\nI was unable to open the file named " + fileName)
+		fmt.Println("Exiting program.")
+		os.Exit(1)
+	}
+	defer inFile.Close()
+
+	var students []Student
+	fileLines := bufio.NewScanner(inFile)
+	for fileLines.Scan() {
+		line := fileLines.Text()
+		fields := bufio.NewScanner(strings.NewReader(line))
+		fields.Split(bufio.ScanWords)
+
+		// Read student details
+		firstName := ""
+		lastName := ""
+		if fields.Scan() {
+			firstName = fields.Text()
+		}
+		if fields.Scan() {
+			lastName = fields.Text()
+		}
+
+		// Read test scores
+		var tests []float64
+		for fields.Scan() {
+			score, err := strconv.ParseFloat(fields.Text(), 64)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing test score: %s", err)
+			}
+			tests = append(tests, score)
+		}
+
+		// Create student struct and populate
+		student := Student{
+			firstName: firstName,
+			lastName:  lastName,
+			tests:     tests,
+		}
+		students = append(students, student)
+	}
+
+	return students, nil
+}
+
+// Sort the students in the file
+func sortStudents(students []Student) []Student {
+	sort.Slice(students, func(i, j int) bool {
+		return students[i].lastName < students[j].lastName
+	})
+
+	return students
+}
+
+/****************************************************************/
+/* Body of main program driver */
+/****************************************************************/
+func main() {
+	/* variables used in the main program */
+
+	var keyboard *bufio.Scanner
+	var fileName string
+	var weightHwk float64
+	var estat error
+
+	keyboard = bufio.NewScanner(os.Stdin)
+
+	// Prompt for a file to be opened
+	fmt.Println("\nEnter a file to be opened: ")
+	keyboard.Scan()
+	fileName = keyboard.Text()
+	myStudents, estat := readFile(fileName)
+	if estat != nil {
+		fmt.Println(estat)
+		os.Exit(1)
+	}
+
+	studentsSorted := sortStudents(myStudents)
+	for _, student := range studentsSorted {
+		fmt.Println(student.firstName, student.lastName)
+	}
+	//fmt.Println("\nI was able to open the file. Reading file named " + fileName + "now.")
+	//fileLines = bufio.NewScanner(inFile)
+	//fmt.Println(fileLines)
+
+	// Prompt for weighted %
+	fmt.Print("\nEnter the % amount to weight test in overall avg: ")
+	keyboard.Scan()
+	weightTest, _ := strconv.ParseFloat(keyboard.Text(), 64)
+	weightHwk = 100 - weightTest
+	fmt.Printf("\nTests will be weighted %.2f, Homework will be weighted %0.2f", weightTest, weightHwk)
+	// Prompt for number of hwks and tests
+	/*
+		fmt.Print("\nEnter a number: ")
+		keyboard.Scan()
+		hwkNumber, _ := strconv.ParseFloat(keyboard.Text(), 64)
+	*/
+}

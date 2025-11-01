@@ -1,0 +1,7 @@
+something = lab1
+Y = lab2
+z = live-missile
+U = Dingus
+Y ~ U
+z < X
+Z = live missile

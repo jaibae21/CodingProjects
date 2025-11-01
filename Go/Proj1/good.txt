@@ -1,0 +1,9 @@
+X = lab1
+Y = lab0
+V = temp-lab
+W = live-radar
+Z = live-missile
+Y > X
+V < X ~ W
+X ! Z
+X ~ U

@@ -1,0 +1,177 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+type Student struct {
+	FirstName     string
+	LastName      string
+	TestGrades    []int
+	HomeworkGrades []int
+}
+
+func main() {
+	// Prompt the user for the input file name
+	fmt.Print("Enter the input file name: ")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	fileName := scanner.Text()
+
+	// Prompt the user for the weighted percentage amount for tests
+	fmt.Print("Enter the weighted percentage amount for tests: ")
+	scanner.Scan()
+	weightStr := scanner.Text()
+	weight, err := strconv.ParseFloat(weightStr, 64)
+	if err != nil {
+		fmt.Println("Invalid weight percentage. Please enter a valid number.")
+		return
+	}
+
+	// Prompt the user for the number of homeworks and tests
+	fmt.Print("Enter the number of homeworks: ")
+	scanner.Scan()
+	homeworksStr := scanner.Text()
+	homeworks, err := strconv.Atoi(homeworksStr)
+	if err != nil {
+		fmt.Println("Invalid number of homeworks. Please enter a valid integer.")
+		return
+	}
+
+	fmt.Print("Enter the number of tests: ")
+	scanner.Scan()
+	testsStr := scanner.Text()
+	tests, err := strconv.Atoi(testsStr)
+	if err != nil {
+		fmt.Println("Invalid number of tests. Please enter a valid integer.")
+		return
+	}
+
+	// Open the input file
+	file, err := os.Open(fileName)
+	if err != nil {
+		fmt.Printf("Error opening file: %s\n", err)
+		return
+	}
+	defer file.Close()
+
+	// Read each student's data from the file
+	students := make([]Student, 0)
+	scanner = bufio.NewScanner(file)
+	for scanner.Scan() {
+		firstName := scanner.Text()
+		lastName := scanner.Scan()
+		testGrades := make([]int, tests)
+		homeworkGrades := make([]int, homeworks)
+
+		for i := 0; i < tests; i++ {
+			scanner.Scan()
+			gradeStr := scanner.Text()
+			grade, err := strconv.Atoi(gradeStr)
+			if err != nil {
+				fmt.Printf("Invalid test grade for student %s %s. Skipping...\n", firstName, lastName)
+				break
+			}
+			testGrades[i] = grade
+		}
+
+		for i := 0; i < homeworks; i++ {
+			scanner.Scan()
+			gradeStr := scanner.Text()
+			grade, err := strconv.Atoi(gradeStr)
+			if err != nil {
+				fmt.Printf("Invalid homework grade for student %s %s. Skipping...\n", firstName, lastName)
+				break
+			}
+			homeworkGrades[i] = grade
+		}
+
+		student := Student{
+			FirstName:     firstName,
+			LastName:      lastName,
+			TestGrades:    testGrades,
+			HomeworkGrades: homeworkGrades,
+		}
+		students = append(students, student)
+	}
+
+	// Sort the students by lastname (then firstname)
+	sort.Slice(students, func(i, j int) bool {
+		lowerLastName1 := strings.ToLower(students[i].LastName)
+		lowerLastName2 := strings.ToLower(students[j].LastName)
+		if lowerLastName1 == lowerLastName2 {
+			return strings.ToLower(students[i].FirstName) < strings.ToLower(students[j].FirstName)
+		}
+		return lowerLastName1 < lowerLastName2
+	})
+
+	// Compute overall class test average and overall class homework average
+	classTestAverage := computeClassAverage(students, tests, true)
+	classHomeworkAverage := computeClassAverage(students, homeworks, false)
+
+	// Compute individual weighted average for each student
+	for i := range students {
+		students[i].WeightedAverage = computeWeightedAverage(students[i].TestGrades, students[i].HomeworkGrades, weight)
+	}
+
+	// Write report summary line
+	fmt.Printf("Class Test Average: %.2f\n", classTestAverage)
+	fmt.Printf("Class Homework Average: %.2f\n", classHomeworkAverage)
+	if len(students[0].TestGrades) < tests || len(students[0].HomeworkGrades) < homeworks {
+		fmt.Println("Note: Some students may have missing grades.")
+	}
+
+	// Write each student's data
+	for _, student := range students {
+		fmt.Println("-------------------------------")
+		fmt.Printf("Name: %s %s\n", student.FirstName, student.LastName)
+		fmt.Println("Test Grades:", student.TestGrades)
+		fmt.Println("Homework Grades:", student.HomeworkGrades)
+		fmt.Printf("Weighted Average: %.2f\n", student.WeightedAverage)
+		if len(student.TestGrades) < tests || len(student.HomeworkGrades) < homeworks {
+			fmt.Println("Note: Missing grades.")
+		}
+	}
+}
+
+func computeClassAverage(students []Student, numGrades int, isTest bool) float64 {
+	total := 0
+	for _, student := range students {
+		var grades []int
+		if isTest {
+			grades = student.TestGrades
+		} else {
+			grades = student.HomeworkGrades
+		}
+
+		for _, grade := range grades {
+			total += grade
+		}
+	}
+
+	return float64(total) / float64(len(students)*numGrades)
+}
+
+func computeWeightedAverage(testGrades, homeworkGrades []int, weight float64) float64 {
+	total := 0
+	for _, grade := range testGrades {
+		total += grade
+	}
+
+	testAverage := float64(total) / float64(len(testGrades))
+	homeworkAverage := 0.0
+	if len(homeworkGrades) > 0 {
+		total = 0
+		for _, grade := range homeworkGrades {
+			total += grade
+		}
+		homeworkAverage = float64(total) / float64(len(homeworkGrades))
+	}
+
+	return (testAverage*weight + homeworkAverage*(100-weight)) / 100.0
+}
