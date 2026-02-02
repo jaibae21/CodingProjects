@@ -1,0 +1,26 @@
+# Core
+opencv-python
+numpy
+requests
+
+# GUI
+PySide6
+
+# OCR
+easyocr
+
+# Image matching
+imagehash
+Pillow
+
+# Data & export
+pandas
+openpyxl
+
+# Fuzzy matching
+rapidfuzz
+
+# Dev
+black
+isort
+pytest
