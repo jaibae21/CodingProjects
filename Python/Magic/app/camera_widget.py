@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 import cv2
+from pathlib import Path
+from datetime import datetime
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
@@ -69,7 +71,7 @@ class CameraWidget(QWidget):
         layout.addWidget(self.preview)
     
     def is_running(self) -> bool:
-        return self._cap is not None and self._cap.isOpened() and self.timer.isActive()
+        return self._cap is not None and self._cap.isOpened() and self._timer.isActive()
     
     def start(self) -> None:
         if self.is_running():
@@ -122,6 +124,28 @@ class CameraWidget(QWidget):
         ok, frame = self._cap.read()
         return frame if ok else None
     
+    def save_current_frame(self, output_dir: str | Path) -> Path | None:
+        """
+        Capture the current frame from the camera and save it to disk with a timestamped filename.
+        
+        Returns: Path to the saved file, or None if captured
+        """
+        frame = self.grab_current_frame()
+        if frame is None:
+            return None
+        
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_path = output_dir / f"capture_{timestamp}.jpg"
+
+        ok = cv2.imwrite(str(out_path), frame)
+        if not ok:
+            return None
+        
+        return out_path
+
     def closeEvent(self, event) -> None:
         # Ensure camera is relased when widget closes
         self.stop()

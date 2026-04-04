@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from pathlib import Path
 import sqlite3
 from typing import Any, Dict, List, Optional
 
@@ -50,10 +50,14 @@ class MainWindow(QMainWindow):
         top_layout.setContentsMargins(0, 0, 0, 0)
 
         self.btn_new_collection = QPushButton("New Collection")
+        self.btn_capture_frame = QPushButton("Capture Frame")
+        self.btn_add_dummy = QPushButton("Add Dummy Entry")
         self.btn_scan = QPushButton("Scan Card")
         self.btn_refresh = QPushButton("Refresh")
 
         top_layout.addWidget(self.btn_new_collection)
+        top_layout.addWidget(self.btn_capture_frame)
+        top_layout.addWidget(self.btn_add_dummy)
         top_layout.addWidget(self.btn_scan)
         top_layout.addWidget(self.btn_refresh)
         top_layout.addStretch(1)
@@ -118,6 +122,8 @@ class MainWindow(QMainWindow):
         # ----- Signals -----
         self.btn_refresh.clicked.connect(self.refresh_all)
         self.btn_new_collection.clicked.connect(self.on_new_collection)
+        self.btn_capture_frame.clicked.connect(self.on_capture_frame)
+        self.btn_add_dummy.clicked.connect(self.on_add_dummy_row)
         self.btn_scan.clicked.connect(self.on_scan_placeholder)
         self.collections_list.currentItemChanged.connect(self.on_collection_selected)
 
@@ -175,6 +181,62 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Created collection: {name}")
         self.load_collections(select_collection_id=new_id)
 
+    def on_capture_frame(self) -> None:
+        if not hasattr(self, "camera_widget"):
+            QMessageBox.warning(self, "Camera Missing", "Camera widget is not available.")
+            return
+
+        if not self.camera_widget.is_running():
+            QMessageBox.information(self, "Camera Not Running", "Start the camera first.")
+            return
+
+        captures_dir = Path.cwd() / "data" / "captures"
+        saved_path = self.camera_widget.save_current_frame(captures_dir)
+
+        if saved_path is None:
+            QMessageBox.warning(self, "Capture Failed", "Could not capture or save the current frame.")
+            return
+
+        self.statusBar().showMessage(f"Saved frame: {saved_path.name}", 5000)
+        QMessageBox.information(self, "Frame Saved", f"Saved to:\n{saved_path}")
+
+    def on_add_dummy_row(self) -> None:
+        if not self.state.selected_collection_id:
+            QMessageBox.information(self, "Select Collection", "Pick a collection first.")
+            return
+
+        dummy_card = {
+            "scryfall_id": "demo-lightning-bolt-0001",
+            "name": "Lightning Bolt",
+            "set_code": "lea",
+            "collector_number": "161",
+            "rarity": "common",
+            "lang": "en",
+            "layout": "normal",
+            "image_uri_normal": "",
+            "oracle_id": "demo-oracle-lightning-bolt",
+        }
+
+        try:
+            card_id, new_qty = services.add_card_to_collection_service(
+                self.conn,
+                collection_id=self.state.selected_collection_id,
+                card=dummy_card,
+                quantity=1,
+                is_foil=False,
+                condition="NM",
+                notes="Dummy row from UI",
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to add dummy row:\n{e}")
+            return
+
+        self.load_entries(self.state.selected_collection_id)
+        self.statusBar().showMessage(
+            f"Added dummy row: Lightning Bolt (card_id={card_id}, qty={new_qty})",
+            5000,
+        )
+
     def on_scan_placeholder(self) -> None:
         if not self.state.selected_collection_id:
             QMessageBox.information(self, "Select Collection", "Pick a collection first.")
@@ -213,6 +275,8 @@ class MainWindow(QMainWindow):
         self.collections_list.clear()
 
         cols = services.list_collections(self.conn)
+        selected_item = None
+
         for c in cols:
             item = QListWidgetItem(c["name"])
             item.setData(Qt.UserRole, c["id"])
@@ -225,9 +289,25 @@ class MainWindow(QMainWindow):
                 item = self.collections_list.item(i)
                 if int(item.data(Qt.UserRole)) == int(target_id):
                     self.collections_list.setCurrentItem(item)
+                    selected_item = item
                     break
 
         self.collections_list.blockSignals(False)
+
+        # Manually sync state because signals were blocked during selection restore
+        if selected_item is not None:
+            cid = int(selected_item.data(Qt.UserRole))
+            name = selected_item.text()
+
+            self.state.selected_collection_id = cid
+            self.state.selected_collection_name = name
+            self.header_label.setText(f"Collection: {name}")
+            self.load_entries(cid)
+        else:
+            self.state.selected_collection_id = None
+            self.state.selected_collection_name = None
+            self.header_label.setText("Select a collection")
+            self.entries_table.setRowCount(0)
 
     def load_entries(self, collection_id: int) -> None:
         rows = services.list_collection_entries(self.conn, collection_id)
