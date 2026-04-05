@@ -1,11 +1,14 @@
 from __future__ import annotations
 from pathlib import Path
+from datetime import datetime
 import sqlite3
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -26,6 +29,7 @@ from app import services
 from storage.db import UniqueConstraintError
 
 from app.camera_widget import CameraWidget
+from app.scanner_controller import ScannerController
 
 # App shell
 
@@ -35,6 +39,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.conn = conn
         self.state = AppState()
+        self.scanner = ScannerController(self)
 
         self.setWindowTitle("Magic Card Scanner")
         self.resize(1100, 650)
@@ -55,11 +60,25 @@ class MainWindow(QMainWindow):
         self.btn_scan = QPushButton("Scan Card")
         self.btn_refresh = QPushButton("Refresh")
 
+        self.chk_auto_scan = QCheckBox("Auto Scan")
+        self.chk_auto_scan.setChecked(True)
+
+        self.chk_foil = QCheckBox("Foil")
+
+        self.cmb_condition = QComboBox()
+        self.cmb_condition.addItems(["NM", "LP", "MP", "HP", "DMG"])
+        self.cmb_condition.setCurrentText("NM")
+
         top_layout.addWidget(self.btn_new_collection)
         top_layout.addWidget(self.btn_capture_frame)
         top_layout.addWidget(self.btn_add_dummy)
         top_layout.addWidget(self.btn_scan)
         top_layout.addWidget(self.btn_refresh)
+        top_layout.addSpacing(16)
+        top_layout.addWidget(self.chk_auto_scan)
+        top_layout.addWidget(self.chk_foil)
+        top_layout.addWidget(QLabel("Condition:"))
+        top_layout.addWidget(self.cmb_condition)
         top_layout.addStretch(1)
 
         root_layout.addWidget(top_bar)
@@ -120,12 +139,20 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready")
 
         # ----- Signals -----
-        self.btn_refresh.clicked.connect(self.refresh_all)
+        self.btn_refresh.clicked.connect(self.on_refresh_clicked)
         self.btn_new_collection.clicked.connect(self.on_new_collection)
         self.btn_capture_frame.clicked.connect(self.on_capture_frame)
         self.btn_add_dummy.clicked.connect(self.on_add_dummy_row)
         self.btn_scan.clicked.connect(self.on_scan_placeholder)
         self.collections_list.currentItemChanged.connect(self.on_collection_selected)
+
+        self.chk_auto_scan.toggled.connect(self.on_auto_scan_toggled)
+        self.chk_foil.toggled.connect(self.on_foil_toggled)
+        self.cmb_condition.currentTextChanged.connect(self.on_condition_changed)
+
+        self.camera_widget.latest_frame_bgr.connect(self.scanner.process_frame)
+        self.scanner.status_changed.connect(self.on_scanner_status_changed)
+        self.scanner.card_stable.connect(self.on_card_stable)
 
         # Initial load
         self.refresh_all()
@@ -143,6 +170,11 @@ class MainWindow(QMainWindow):
             self.entries_table.setRowCount(0)
             self.header_label.setText("Select a collection")
         self.statusBar().showMessage("Refreshed")
+
+    def on_refresh_clicked(self) -> None:
+        self.refresh_all()
+        self.scanner.force_rescan()
+        self.statusBar().showMessage("Refreshed and rescan armed", 4000)
 
     def on_new_collection(self) -> None:
         dlg = QMessageBox(self)
@@ -265,6 +297,46 @@ class MainWindow(QMainWindow):
 
         self.header_label.setText(f"Collection: {name}")
         self.load_entries(int(cid))
+
+    def on_auto_scan_toggled(self, checked: bool) -> None:
+        self.state.auto_scan_enabled = checked
+        self.scanner.set_enabled(checked)
+
+    def on_foil_toggled(self, checked: bool) -> None:
+        self.state.foil_enabled = checked
+        self.statusBar().showMessage(f"Foil set to: {'On' if checked else 'Off'}", 3000)
+
+    def on_condition_changed(self, value: str) -> None:
+        self.state.condition = value
+        self.statusBar().showMessage(f"Condition set to: {value}", 3000)
+
+    def on_scanner_status_changed(self, text: str) -> None:
+        self.statusBar().showMessage(text)
+
+    def on_card_stable(self, frame_bgr) -> None:
+        """
+        Temporary behavior:
+        - show status
+        - optionally save a debug image
+        """
+        captures_dir = Path.cwd() / "data" / "auto_captures"
+        captures_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        out_path = captures_dir / f"auto_{timestamp}.jpg"
+
+        try:
+            import cv2
+            cv2.imwrite(str(out_path), frame_bgr)
+            self.statusBar().showMessage(
+                f"Stable card detected. Saved debug frame: {out_path.name}",
+                5000,
+            )
+        except Exception as e:
+            self.statusBar().showMessage(
+                f"Stable card detected, but save failed: {e}",
+                5000,
+            )
 
     # -------------------------
     # Loading data into UI
