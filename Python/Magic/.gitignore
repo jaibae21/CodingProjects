@@ -1,0 +1,79 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# =========================
+# Virtual Environments
+# =========================
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# SQLite / Database
+# =========================
+*.sqlite
+*.db
+*.db-journal
+
+# =========================
+# App Data (VERY IMPORTANT)
+# =========================
+data/
+# If you later want to keep structure:
+# data/*
+# !data/.gitkeep
+
+# =========================
+# Captured / Generated Images
+# =========================
+*.jpg
+*.jpeg
+*.png
+
+# OR (better, more controlled)
+# data/captures/
+# data/auto_captures/
+# data/normalized_patches/
+# data/stable_frames/
+
+# =========================
+# Testing
+# =========================
+.pytest_cache/
+.coverage
+
+# =========================
+# Misc
+# =========================
+*.bak
+*.tmp

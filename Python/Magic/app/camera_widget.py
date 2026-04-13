@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QComboBox, QMessageBox
 )
 
+# MTG cards are roughly 63x88mm so aspect ratio is 0.716
+CARD_ASPECT_RATIO = 63.0 / 88.0 # width / height
 @dataclass
 class CameraConfig:
     device_index: int = 0
@@ -173,8 +175,25 @@ class CameraWidget(QWidget):
         
         self.latest_frame_bgr.emit(frame_bgr)
 
+        # Live Guide box
+        display_frame = frame_bgr.copy()
+        h,w = display_frame.shape[:2]
+        guide_w = int(w * 0.42)
+        guide_h = int(guide_w / CARD_ASPECT_RATIO)
+        
+        if guide_h > h * 0.80:
+            guide_h = int(h * 0.80)
+            guide_w = int(guide_h * CARD_ASPECT_RATIO)
+
+        x1 = (w - guide_w) // 2
+        y1 = (h - guide_h) // 2
+        x2 = x1 + guide_w
+        y2 = y1 + guide_h
+
+        cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
         # Convert BGR to RGB for Qt
-        frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        frame_rgb = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
         h, w, ch = frame_rgb.shape
         bytes_per_line = ch * w
         qimg = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)

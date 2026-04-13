@@ -12,16 +12,16 @@ class ScannerConfig:
     signature_size: int = 64
 
     # Difference threshold for "something changed" (card dectection)
-    change_threshold: float = 12.0
+    change_threshold: float = 8.0
 
     # Difference threshold for "stable enough"
-    stable_threshold: float = 2.5
+    stable_threshold: float = 1.5
 
     # How long frame must stay stable
-    stable_duration_sec: float = 0.5
+    stable_duration_sec: float = 0.35
 
     # Cooldown after successful trigger
-    cooldown_sec: float = 1.25
+    cooldown_sec: float = 1.0
 
 class ScannerController(QObject):
     """
@@ -45,7 +45,7 @@ class ScannerController(QObject):
 
         self._last_signatrue: Optional[np.ndarray] = None
         self._candidate_signature: Optional[np.ndarray] = None
-        self._last_triggeer_signature: Optional[np.ndarray] = None
+        self._last_trigger_signature: Optional[np.ndarray] = None
 
         self._candidate_frame: Optional[np.ndarray] = None
 
@@ -93,42 +93,45 @@ class ScannerController(QObject):
             self._set_status("Watching for Card")
             return
 
+        # Frame to frame difference score
         change_score = self._mean_abs_diff(signature, self._last_signatrue)
+        self.debug_changed.emit(change_score, change_score)
 
-        # Has visible scene changed enought to start looking for stability
-        if change_score >= self.config.change_threshold:
-            self._change_armed = True
-            self._candidate_signature = signature
-            self._candidate_frame = frame_bgr.copy()
-            self._stable_since = None
-            self._set_status("Change detected...")
-        elif self._change_armed and self._candidate_signature is not None:
-            # Once armed, watch whether candidate stays stable
-            stable_score = self._mean_abs_diff(signature, self._candidate_signature)
-            self.debug_changed.emit(change_score, stable_score)
-
-            if stable_score <= self.config.stable_threshold:
+        # Step 1: Arm, Has visible scene changed enought to start looking for stability
+        if not self._change_armed:
+            if change_score >= self.config.change_threshold:
+                self._change_armed = True
+                self._candidate_signature = signature
+                self._candidate_frame = frame_bgr.copy()
+                self._stable_since = None
+                self._set_status("Change detected...")
+        else:
+            # Step 2: Once armed, watch whether candidate stays stable
+            if change_score <= self.config.stable_threshold:
                 if self._stable_since is None:
                     self._stable_since = now
+                    self._candidate_frame = frame_bgr.copy()
                     self._set_status("Stabilizing...")
-                elif (now - self._stable_since) >= self.config.stable_duration_sec:
-                    if (now - self._last_trigger_time) >= self.config.cooldown_sec:
-                        if not self._looks_like_last_trigger(signature):
-                            self._last_trigger_time = now
-                            self._last_trigger_signature = signature.copy()
-                            self._candidate_frame = frame_bgr.copy()
-                            self._set_status("Card stable - triggered")
-                            self.card_stable.emit(self._candidate_frame.copy())
-                        else:
-                            self._set_status("Same cared still in view")
+                else:
+                    self._candidate_frame = frame_bgr.copy()
+                    if (now - self._stable_since) >= self.config.stable_duration_sec:
+                        if (now - self._last_trigger_time) >= self.config.cooldown_sec:
+                            if not self._looks_like_last_trigger(signature):
+                                self._last_trigger_time = now
+                                self._last_trigger_signature = signature.copy()
+                                self._candidate_frame = frame_bgr.copy()
+                                self._set_status("Card stable - triggered")
+                                self.card_stable.emit(self._candidate_frame.copy())
+                            else:
+                                self._set_status("Same cared still in view")
                         self._change_armed = False
                         self._stable_since = None
-                else:
-                    self._candidate_signature = signature
-                    self._candidate_frame = frame_bgr.copy()
-                    self._stable_since = now
-                    self._set_status("Motion detected...")
-
+            else:
+                # Still moving, reset stabilization timer
+                self._stable_since = now
+                self._candidate_frame = frame_bgr.copy()
+                self._set_status("Motion detected...")
+            #print(f"change_score={change_score:.2f}, "f"stable_score={stable_score:.2f}, "f"stable_since={self._stable_since}")
         self._last_signatrue = signature
     
     def _compute_signature(self, frame_bgr: np.ndarray) -> Optional[np.ndarray]:

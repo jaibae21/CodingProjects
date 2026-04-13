@@ -1,7 +1,9 @@
 from __future__ import annotations
+import sqlite3
+import cv2
 from pathlib import Path
 from datetime import datetime
-import sqlite3
+
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import Qt
@@ -24,12 +26,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from PySide6.QtGui import  (
+    QPixmap, 
+    QImage
+)
+
 from app.state import AppState
 from app import services
 from storage.db import UniqueConstraintError
 
 from app.camera_widget import CameraWidget
 from app.scanner_controller import ScannerController
+from app.image_utils import extract_normalized_card, save_image
 
 # App shell
 
@@ -108,6 +116,13 @@ class MainWindow(QMainWindow):
         self.camera_widget = CameraWidget(max_devices=4)
         right_layout.addWidget(self.camera_widget)
 
+        # Card Preview
+        self.patch_label = QLabel("Normalized Card Preview")
+        self.patch_label.setAlignment(Qt.AlignCenter)
+        self.patch_label.setMinimumHeight(260)
+        self.patch_label.setStyleSheet("QLabel { background: #111; color: #bbb; border: 1px solid #333;}")
+        right_layout.addWidget(self.patch_label)
+
         # Entries table
         self.entries_table = QTableWidget(0, 8)
         self.entries_table.setHorizontalHeaderLabels(
@@ -160,6 +175,18 @@ class MainWindow(QMainWindow):
     # -------------------------
     # UI actions
     # -------------------------
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+
+        # Re-scale current patch pixmap on resize if one exists
+        pixmap = self.patch_label.pixmap()
+        if pixmap is not None and not pixmap.isNull():
+            scaled = pixmap.scaled(
+                self.patch_label.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            self.patch_label.setPixmap(scaled)
 
     def refresh_all(self) -> None:
         self.load_collections()
@@ -315,28 +342,24 @@ class MainWindow(QMainWindow):
 
     def on_card_stable(self, frame_bgr) -> None:
         """
-        Temporary behavior:
-        - show status
-        - optionally save a debug image
+        Detect card contour, perspective warp, normalize card and save, show in GUI
         """
-        captures_dir = Path.cwd() / "data" / "auto_captures"
-        captures_dir.mkdir(parents=True, exist_ok=True)
+        normalized_card, quad = extract_normalized_card(frame_bgr)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        out_path = captures_dir / f"auto_{timestamp}.jpg"
+        if normalized_card is None:
+            self.statusBar().showMessage("Stable frame detected, no card found")
+            return
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        patches_dir = Path.cwd() / "data" / "normalized_patches"
+        output_path = patches_dir / f"card_{timestamp}.jpg"
 
         try:
-            import cv2
-            cv2.imwrite(str(out_path), frame_bgr)
-            self.statusBar().showMessage(
-                f"Stable card detected. Saved debug frame: {out_path.name}",
-                5000,
-            )
+            save_image(normalized_card, output_path)
+            self._show_card_preview(normalized_card)
+            self.statusBar().showMessage(f"Card extracted and saved: {output_path.name}", 5000)
         except Exception as e:
-            self.statusBar().showMessage(
-                f"Stable card detected, but save failed: {e}",
-                5000,
-            )
+            self.statusBar().showMessage(f"Card detected but failed to save: {e}", 5000)
 
     # -------------------------
     # Loading data into UI
@@ -404,6 +427,34 @@ class MainWindow(QMainWindow):
         item.setFlags(item.flags() ^ Qt.ItemIsEditable)
         self.entries_table.setItem(row, col, item)
 
+    def _show_card_preview(self, image_bgr) -> None:
+        """
+        Display a BGR OpenCV image in the patch preview label.
+        """
+        if image_bgr is None or image_bgr.size == 0:
+            self.patch_label.setText("No patch to display")
+            self.patch_label.setPixmap(QPixmap())
+            return
+
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        h, w, ch = image_rgb.shape
+        bytes_per_line = ch * w
+
+        qimg = QImage(
+            image_rgb.data,
+            w,
+            h,
+            bytes_per_line,
+            QImage.Format_RGB888,
+        )
+
+        pixmap = QPixmap.fromImage(qimg)
+        pixmap = pixmap.scaled(
+            self.patch_label.size(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        self.patch_label.setPixmap(pixmap)
 
     def closeEvent(self, event) -> None:
         try:
