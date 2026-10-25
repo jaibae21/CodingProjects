@@ -7,7 +7,7 @@ class BaseAgent(ABC):
         self.n_actions = n_actions
 
     @abstractmethod
-    def act(self, stat: np.ndarray, step: int) -> int:
+    def act(self, stat: np.ndarray, step: int, greedy: bool = False) -> int:
         ...
     
     @abstractmethod

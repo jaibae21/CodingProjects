@@ -1,9 +1,14 @@
 from dataclasses import dataclass
+from typing import Optional
 
 @dataclass
 class Config:
     # Environment
     max_steps_per_episode: int = 200
+    random_maze: bool = True
+    randomize_maze_each_episode: bool = True
+    maze_rows: int = 15
+    maze_cols: int = 15
 
     # DQN
     gamma: float = 0.99
@@ -26,10 +31,15 @@ class Config:
 
     # Training
     total_steps: int = 80_000
-    seed: int = 42
+    seed: Optional[int] = None
     device: str = "cpu" # "cuda" if you have GPU + torch.cuda.is_available()
 
     # Rendering / Logging
     render_every_episodes: int = 5  # render during training every N episode
     fps_when_rendering: int = 30
     checkpoint_dir: str = "runs"
+    run_name: Optional[str] = None
+    train_metrics_path: Optional[str] = None
+    eval_metrics_path: Optional[str] = None
+    eval_every_episodes: int = 25
+    eval_episodes: int = 10

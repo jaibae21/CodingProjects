@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from typing import Tuple, List
-from .levels import DEFAULT_LEVEL
+from .levels import DEFAULT_LEVEL, generate_random_maze
 
 class MazeEnv:
     """
@@ -27,10 +27,23 @@ class MazeEnv:
         3: (0,1),    #Right
     }
 
-    def __init__(self, level: List[str] = None, max_steps: int = 200, seed: int = 42):
+    def __init__(
+        self,
+        level: List[str] = None,
+        max_steps: int = 200,
+        seed: int | None = None,
+        random_maze: bool = True,
+        maze_rows: int = 15,
+        maze_cols: int = 15,
+        randomize_on_reset: bool = True,
+    ):
         self.rng = np.random.default_rng(seed)
-        self.level = level or DEFAULT_LEVEL
         self.max_steps = max_steps
+        self.random_maze = random_maze and level is None
+        self.randomize_on_reset = randomize_on_reset
+        self.maze_rows = maze_rows
+        self.maze_cols = maze_cols
+        self.level = level or self._new_level()
         self._parse_level(self.level)
         self.reset()
 
@@ -72,6 +85,9 @@ class MazeEnv:
         return self.H * self.W * 3
     
     def reset(self) -> np.ndarray:
+        if self.random_maze and self.randomize_on_reset:
+            self.level = self._new_level()
+            self._parse_level(self.level)
         self.agent = tuple(self.start)
         self.steps = 0
         return self._obs()
@@ -112,3 +128,8 @@ class MazeEnv:
     # Convience used by renderer
     def get_grid_layers(self):
         return self.grid, self.agent, self.goal
+
+    def _new_level(self) -> List[str]:
+        if self.random_maze:
+            return generate_random_maze(self.maze_rows, self.maze_cols, self.rng)
+        return DEFAULT_LEVEL

@@ -8,8 +8,8 @@ class ReplayBuffer:
         self.reset()
 
     def reset(self):
-        self.s = np.zeroes((self.capacity, self.obs_dim), dtype=np.float32)
-        self.a = np.zeroes((self.capacity, 1), dtype=np.int64)
+        self.s = np.zeros((self.capacity, self.obs_dim), dtype=np.float32)
+        self.a = np.zeros((self.capacity, 1), dtype=np.int64)
         self.r = np.zeros((self.capacity, 1), dtype=np.float32)
         self.s2 = np.zeros((self.capacity, self.obs_dim), dtype=np.float32)
         self.d = np.zeros((self.capacity, 1), dtype=np.float32)

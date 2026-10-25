@@ -16,7 +16,7 @@ class DQNNet(nn.Module):
             layers += [nn.Linear(last, h), nn.ReLU()]
             last = h
         layers += [nn.Linear(last, output_dim)]
-        self.net == nn.Sequential(*layers)
+        self.net = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.net(x)

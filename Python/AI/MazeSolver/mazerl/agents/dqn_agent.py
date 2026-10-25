@@ -33,6 +33,7 @@ class DQNAgent(BaseAgent):
         self.memory = ReplayBuffer(config.buffer_size, obs_size)
         self.device = device
         self.global_step = 0
+        self.last_loss = None
 
     def epsilon_by_step(self, step: int) -> float:
         # Linear decay from eps_start -> eps_end over eps_decay_steps
@@ -40,8 +41,8 @@ class DQNAgent(BaseAgent):
             max(0.0, (self.cfg.eps_decay_steps - step) / self.cfg.eps_decay_steps)
         return float(eps)
     
-    def act(self, state: np.ndarray, step: int) -> int:
-        eps = self.epsilon_by_step(step)
+    def act(self, state: np.ndarray, step: int, greedy: bool = False) -> int:
+        eps = 0.0 if greedy else self.epsilon_by_step(step)
         if np.random.rand() < eps:
             return np.random.randint(self.n_actions)
         with torch.no_grad():
@@ -59,14 +60,14 @@ class DQNAgent(BaseAgent):
         if self.global_step % self.cfg.train_every != 0:
             return
         
-        self._train_step()
+        self.last_loss = self._train_step()
 
         if self.global_step % self.cfg.target_update_interval == 0:
             self.target.load_state_dict(self.policy.state_dict())
 
     def _train_step(self):
         if len(self.memory) < self.cfg.batch_size:
-            return
+            return None
         
         s, a, r, s2, d = self.memory.sample(self.cfg.batch_size)
 
@@ -91,6 +92,7 @@ class DQNAgent(BaseAgent):
         loss.backward()
         torch.nn.utils.clip_grad_norm_(self.policy.parameters(), 10.0)
         self.optim.step()
+        return float(loss.item())
 
     def save(self, path: str):
         os.makedirs(os.path.dirname(path), exist_ok=True)
