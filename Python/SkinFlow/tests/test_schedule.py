@@ -6,17 +6,19 @@ import pytest
 from skinflow.services import empty_routine, new_step
 
 
-def test_week_starts_on_monday_and_preserves_application_order(schedule):
+def test_current_week_starts_on_monday_and_preserves_application_order(schedule):
     week = schedule.week(date(2026, 10, 29))
     assert len(week) == 7
     assert week[0][0] == date(2026, 10, 26)
     assert week[-1][0] == date(2026, 11, 1)
-    for day, am, pm in week:
+    for day, am, night in week:
         assert "Gentle Skin Cleanser" in am["steps"][0]["label"]
         assert "SPF 30+" in am["steps"][-1]["label"]
-        assert pm["shower"] == (day.weekday() in (1, 3))
-        assert "Moisturizing Lotion" in pm["steps"][-1]["label"]
-    assert "Resurfacing Retinol" in week[-1][2]["steps"][1]["label"]
+        assert night["shower"] == (day.weekday() in (1, 3))
+    assert "MISSHA" in week[2][2]["steps"][0]["label"]
+    assert "Sungboon" in week[-1][2]["steps"][2]["label"]
+    assert "Klairs" in week[5][2]["steps"][-1]["label"]
+    assert all(len(entry) == 3 for entry in week)
 
 
 @pytest.mark.parametrize(
@@ -29,12 +31,12 @@ def test_week_starts_on_monday_and_preserves_application_order(schedule):
     ],
 )
 def test_first_saturday_is_review_only(schedule, day, has_review):
-    steps = schedule.routine(day, "PM")["steps"]
+    steps = schedule.routine(day, "Night")["steps"]
     reviews = [s for s in steps if s["review"]]
     assert bool(reviews) is has_review
     if has_review:
         assert reviews[0]["product_id"] is None
-        assert "CAUTION / REVIEW" in reviews[0]["label"]
+        assert "REVIEW / OPTIONAL" in reviews[0]["label"]
 
 
 def test_weekly_edit_and_one_off_override_have_distinct_scopes(schedule):
@@ -53,10 +55,10 @@ def test_weekly_edit_and_one_off_override_have_distinct_scopes(schedule):
 
 def test_override_replaces_monthly_steps_too(schedule):
     day = date(2026, 11, 7)
-    schedule.set_routine(day, "PM", empty_routine(), weekly=False)
-    assert not schedule.routine(day, "PM")["steps"]
-    schedule.clear_override(day, "PM")
-    assert any(s["review"] for s in schedule.routine(day, "PM")["steps"])
+    schedule.set_routine(day, "Night", empty_routine(), weekly=False)
+    assert not schedule.routine(day, "Night")["steps"]
+    schedule.clear_override(day, "Night")
+    assert any(s["review"] for s in schedule.routine(day, "Night")["steps"])
 
 
 def test_move_preserves_baseline_and_actual_completions(schedule):
@@ -76,6 +78,7 @@ def test_move_preserves_baseline_and_actual_completions(schedule):
 def test_rollback_restores_all_schedule_scopes_without_touching_completions(schedule):
     original = schedule.snapshot()[0]
     initial_revision = schedule.revisions()[0].id
+    count = len(schedule.revisions())
     day = date(2026, 10, 26)
     schedule.mark(day, "AM", schedule.routine(day, "AM")["steps"][0], True)
     schedule.set_routine(day, "AM", empty_routine(), weekly=False)
@@ -83,7 +86,7 @@ def test_rollback_restores_all_schedule_scopes_without_touching_completions(sche
     schedule.rollback(initial_revision)
     assert schedule.snapshot()[0] == original
     assert len(schedule.history()) == 1
-    assert len(schedule.revisions()) == 4
+    assert len(schedule.revisions()) == count + 3
     assert "Rolled back" in schedule.revisions()[0].description
 
 
@@ -129,13 +132,13 @@ def test_invalid_routine_does_not_create_revision(schedule):
 
 def test_next_treatment_skips_earlier_period_and_generic_sunscreen_reminders(schedule):
     sunday = date(2026, 10, 25)
-    upcoming = schedule.next_treatment(sunday, "PM")
+    upcoming = schedule.next_treatment(sunday, "Night")
     assert upcoming[0] == sunday
-    assert "PM" in upcoming[1] and "Resurfacing Retinol" in upcoming[1]
+    assert "Night" in upcoming[1] and "Sungboon" in upcoming[1]
     payload, _version = schedule.snapshot()
     for key, routine in payload["weekly"].items():
         routine["steps"] = [step for step in routine["steps"] if step["product_id"] is None]
     schedule._save(payload, schedule.snapshot()[1], "Only reminders")
     upcoming = schedule.next_treatment(sunday)
     assert upcoming[0] == date(2026, 11, 7)
-    assert "CAUTION / REVIEW" in upcoming[1]
+    assert "REVIEW / OPTIONAL" in upcoming[1]

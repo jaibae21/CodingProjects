@@ -2,10 +2,12 @@
 
 import os
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import sessionmaker
@@ -37,6 +39,19 @@ class Database:
     def migrate(self) -> None:
         config = Config()
         config.set_main_option("script_location", str(Path(__file__).parent / "migrations"))
+        if self.path.exists():
+            with sqlite3.connect(self.path) as connection:
+                has_version = connection.execute(
+                    "SELECT name FROM sqlite_master WHERE name='alembic_version'"
+                ).fetchone()
+                current = (
+                    connection.execute("SELECT version_num FROM alembic_version").fetchone()
+                    if has_version
+                    else None
+                )
+            if current and current[0] != ScriptDirectory.from_config(config).get_current_head():
+                stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+                self.backup(self.path.with_name(f"skinflow-pre-upgrade-{stamp}.db"))
         with self.engine.begin() as connection:
             config.attributes["connection"] = connection
             command.upgrade(config, "head")

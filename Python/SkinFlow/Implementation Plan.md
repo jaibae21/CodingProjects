@@ -2,13 +2,14 @@
 
 ## Current status
 
-Phase 1 is implemented on the initial development branch, `feature/skinflow-phase-1`.
+Phases 1 and 2 are implemented on the project branch, `feature/skinflow-phase-1`.
+This branch covers SkinFlow work across phases; new branches are not required per phase.
 The project lives in `Python/SkinFlow`; development and tests use its `.venv`.
-The Phase 1 validation run passed 33 unit/GUI tests, lint, formatting, dependency consistency,
-and an isolated offscreen startup check. Dashboard and calendar screenshots were inspected.
+The two-session correction passed 94 unit/GUI tests, lint, and formatting. An isolated offscreen
+startup check and dashboard/calendar/review/dropdown previews are part of the validation record.
 These are recorded results from that run; rerun relevant checks after code changes.
 
-Later phases below are planned work. The Windows build script exists, but a packaged
+Phases 3–4 below are planned work. The Windows build script exists, but a packaged
 executable has not been built or validated. See [README.md](README.md) for launch commands
 and [architecture](docs/ARCHITECTURE.md) for module boundaries and persistence decisions.
 
@@ -35,7 +36,26 @@ Acceptance: launch from the virtual environment without credentials or network a
 edit inventory and routines; preserve changes after restart; keep actual completion history
 independent of plan edits; pass the Phase 1 automated checks.
 
-## Phase 2 — scheduling safety rules and skin tracking
+## Phase 2 — implemented: safety rules, tracking, and the current routine
+
+- [x] Retain the existing project branch across phases.
+- [x] Address light-mode dropdown readability with an explicit application/popup palette.
+- [x] Install the supplied October 25, 2026 current routine once, preserving previous plans.
+- [x] Support Morning and Night (evening/nighttime) plus independent scalp/shower routines.
+- [x] Correct the generated four-session specification: move Saturday/Sunday treatments to Night.
+- [x] Add migration `0003` for existing plans/templates, preserving revisions and actual completions.
+- [x] Store instructions, skip conditions, optional flags, and substitution choices per step.
+- [x] Add the `0002` migration and pre-upgrade database backup.
+- [x] Add evidence-aware safety tags without inventing ingredient lists.
+- [x] Implement all listed interaction/frequency/spacing/region warnings and ordering cautions.
+- [x] Review moved routines against surrounding sessions; moving scalp does not move facial actives.
+- [x] Require explicit occurrence approval of the monthly peel and surrounding recovery proposals.
+- [x] Keep skipped actives unscheduled and allow skipping without losing later manual edits.
+- [x] Add dated region states, severity, notes, photo references, and resolution.
+- [x] Show a timeline beside actual product use without asserting medical causation.
+- [x] Test rule boundaries, migrations, persistence, offline operation, GUI palettes, and approval flows.
+
+Implemented scope and acceptance details:
 
 1. Add a migration and observation service for symptom, severity, region, date, notes,
    and optional local photo references.

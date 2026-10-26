@@ -45,7 +45,7 @@ PRODUCTS = [
 ]
 
 
-def seed(database: Database) -> None:
+def _seed_baseline(database: Database) -> None:
     """Seed once, atomically. Never repopulate products a user deleted."""
     with database.sessions.begin() as session:
         if session.get(Setting, "seed_version"):
@@ -125,3 +125,10 @@ def seed(database: Database) -> None:
             PlanRevision(description="Initial editable baseline", payload=deepcopy(payload))
         )
         session.add(Setting(key="seed_version", value="1"))
+
+
+def seed(database: Database) -> None:
+    from skinflow.current_routine import initialize_current
+
+    _seed_baseline(database)
+    initialize_current(database)

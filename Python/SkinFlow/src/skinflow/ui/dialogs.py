@@ -6,6 +6,7 @@ from uuid import uuid4
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -24,7 +25,16 @@ from PySide6.QtWidgets import (
 )
 
 from skinflow.models import Product
-from skinflow.services import CATEGORIES, STATUSES, InventoryService, empty_routine, new_step
+from skinflow.safety.tags import TAGS
+from skinflow.services import (
+    CATEGORIES,
+    PERIOD_LABELS,
+    PERIODS,
+    STATUSES,
+    InventoryService,
+    empty_routine,
+    new_step,
+)
 from skinflow.ui.common import guarded
 
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -82,6 +92,29 @@ class ProductDialog(QDialog):
         self.verified = QCheckBox("I verified the full ingredient list against the label")
         self.verified.setChecked(bool(product and product.ingredients_verified))
         form.addRow(self.verified)
+        tag_notice = QLabel(
+            "Safety tags are explicit records, separate from full ingredient verification."
+        )
+        tag_notice.setWordWrap(True)
+        form.addRow(tag_notice)
+        self.tags = {}
+        for key, label in TAGS.items():
+            row = QHBoxLayout()
+            checked = QCheckBox(label)
+            source = QComboBox()
+            source.addItem("User reported", "user_reported")
+            source.addItem("Label verified", "label_verified")
+            note = QLineEdit()
+            note.setPlaceholderText("Evidence / label notes")
+            evidence = (product.safety_tags or {}).get(key) if product else None
+            if evidence:
+                checked.setChecked(True)
+                source.setCurrentIndex(source.findData(evidence["source"]))
+                note.setText(evidence.get("note", ""))
+            for field in (checked, source, note):
+                row.addWidget(field)
+            self.tags[key] = (checked, source, note)
+            form.addRow(row)
         self._text(form, "frequency", "Recommended frequency")
         for key, label in (("opened_on", "Opened date"), ("expires_on", "Expiration date")):
             field = QLineEdit()
@@ -146,6 +179,11 @@ class ProductDialog(QDialog):
                     raise ValueError("Dates must use YYYY-MM-DD.") from None
             data[key] = value
         data["ingredients_verified"] = self.verified.isChecked()
+        data["safety_tags"] = {
+            key: {"source": source.currentData(), "note": note.text().strip()}
+            for key, (checked, source, note) in self.tags.items()
+            if checked.isChecked()
+        }
         if data["ingredients_verified"] and not data["ingredients"].strip():
             raise ValueError("Enter the ingredient list before marking it verified.")
         self.inventory.save(data, self.product.id if self.product else None)
@@ -156,7 +194,7 @@ class StepDialog(QDialog):
     def __init__(self, parent, inventory: InventoryService, step: dict | None = None):
         super().__init__(parent)
         self.setWindowTitle("Routine step")
-        self.resize(570, 240)
+        self.resize(700, 620)
         self.original = step
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -181,6 +219,29 @@ class StepDialog(QDialog):
         form.addRow("Step label", self.label)
         form.addRow(self.optional)
         form.addRow(self.review)
+        self.region = QComboBox()
+        self.region.setEditable(True)
+        self.region.addItems(("Face", "Eyebrows", "Nose", "Scalp", "Body"))
+        self.region.setCurrentText(step.get("region", "Face") if step else "Face")
+        self.instructions = QPlainTextEdit(step.get("instructions", "") if step else "")
+        self.instructions.setMaximumHeight(70)
+        self.skip_conditions = QLineEdit(step.get("skip_conditions", "") if step else "")
+        self.frequency = QLineEdit(step.get("frequency", "") if step else "")
+        self.substitutions = QListWidget()
+        self.substitutions.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        self.substitutions.setMaximumHeight(100)
+        for product in inventory.list():
+            from PySide6.QtWidgets import QListWidgetItem
+
+            item = QListWidgetItem(product.label)
+            item.setData(Qt.ItemDataRole.UserRole, product.id)
+            self.substitutions.addItem(item)
+            item.setSelected(bool(step and product.id in step.get("substitutions", [])))
+        form.addRow("Application region", self.region)
+        form.addRow("Product directions", self.instructions)
+        form.addRow("Skip conditions", self.skip_conditions)
+        form.addRow("Frequency notes", self.frequency)
+        form.addRow("Substitution options", self.substitutions)
         layout.addLayout(form)
         buttons(self, layout)
         self.result_step = None
@@ -201,6 +262,15 @@ class StepDialog(QDialog):
         )
         if self.original:
             self.result_step["id"] = self.original["id"]
+        self.result_step.update(
+            region=self.region.currentText().strip() or "Face",
+            instructions=self.instructions.toPlainText(),
+            skip_conditions=self.skip_conditions.text(),
+            frequency=self.frequency.text(),
+            substitutions=[
+                i.data(Qt.ItemDataRole.UserRole) for i in self.substitutions.selectedItems()
+            ],
+        )
         super().accept()
 
 
@@ -291,7 +361,7 @@ class MonthlyRuleDialog(QDialog):
                 "name": "Monthly treatment",
                 "ordinal": 1,
                 "weekday": 5,
-                "period": "PM",
+                "period": "Night",
                 "enabled": True,
                 "routine": empty_routine(),
             }
@@ -308,8 +378,19 @@ class MonthlyRuleDialog(QDialog):
         self.weekday.addItems(DAYS)
         self.weekday.setCurrentIndex(self.rule["weekday"])
         self.period = QComboBox()
-        self.period.addItems(("AM", "PM"))
-        self.period.setCurrentText(self.rule["period"])
+        for key, label in zip(PERIODS, PERIOD_LABELS):
+            self.period.addItem(label, key)
+        self.period.setCurrentIndex(self.period.findData(self.rule["period"]))
+        self.requires_review = QCheckBox("Require review for each occurrence")
+        self.requires_review.setChecked(self.rule.get("requires_review", False))
+        self.mode = QComboBox()
+        self.mode.addItems(("Append to routine", "Replace routine"))
+        self.mode.setCurrentIndex(1 if self.rule.get("mode") == "replace" else 0)
+        self.before = QComboBox()
+        self.after = QComboBox()
+        for field, key in ((self.before, "recovery_before"), (self.after, "recovery_after")):
+            field.addItems([str(i) for i in range(8)])
+            field.setCurrentIndex(self.rule.get(key, 0))
         self.enabled = QCheckBox("Enabled")
         self.enabled.setChecked(self.rule["enabled"])
         for label, field in (
@@ -320,6 +401,10 @@ class MonthlyRuleDialog(QDialog):
         ):
             form.addRow(label, field)
         form.addRow(self.enabled)
+        form.addRow(self.requires_review)
+        form.addRow("When approved", self.mode)
+        form.addRow("Recovery days before", self.before)
+        form.addRow("Recovery days after", self.after)
         layout.addLayout(form)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
@@ -331,9 +416,7 @@ class MonthlyRuleDialog(QDialog):
         self.update_summary()
 
     def update_summary(self) -> None:
-        self.summary.setText(
-            f"{len(self.rule['routine']['steps'])} steps appended to the base routine."
-        )
+        self.summary.setText(f"{len(self.rule['routine']['steps'])} treatment steps.")
 
     def edit_steps(self) -> None:
         dialog = RoutineDialog(
@@ -351,8 +434,12 @@ class MonthlyRuleDialog(QDialog):
             name=self.name.text().strip(),
             ordinal=self.ordinal.currentIndex() + 1,
             weekday=self.weekday.currentIndex(),
-            period=self.period.currentText(),
+            period=self.period.currentData(),
             enabled=self.enabled.isChecked(),
+            requires_review=self.requires_review.isChecked(),
+            mode="replace" if self.mode.currentIndex() == 1 else "append",
+            recovery_before=self.before.currentIndex(),
+            recovery_after=self.after.currentIndex(),
         )
         super().accept()
 
@@ -367,8 +454,8 @@ class MonthlyDialog(QDialog):
         self.resize(650, 390)
         layout = QVBoxLayout(self)
         notice = QLabel(
-            "Monthly steps append to the weekly routine. A one-off override replaces "
-            "the entire routine for that date, including monthly steps."
+            "Monthly rules can append or replace a session. Treatments marked for review "
+            "remain reminders until an occurrence is explicitly approved in the calendar."
         )
         notice.setWordWrap(True)
         layout.addWidget(notice)

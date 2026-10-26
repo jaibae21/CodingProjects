@@ -1,5 +1,7 @@
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -10,9 +12,12 @@ from PySide6.QtWidgets import (
 )
 
 from skinflow.database import Database
+from skinflow.safety.service import SafetyService
 from skinflow.services import InventoryService, ScheduleService, SettingsService
+from skinflow.tracking import ObservationService
 from skinflow.ui.common import guarded
 from skinflow.ui.pages import CalendarPage, DashboardPage, InventoryPage, SettingsPage
+from skinflow.ui.tracking_views import TrackingPage
 
 
 class MainWindow(QMainWindow):
@@ -37,21 +42,26 @@ class MainWindow(QMainWindow):
         side.addWidget(QLabel("Care, at your own pace."))
         side.addSpacing(32)
         self.navigation = QListWidget()
-        self.navigation.addItems(("Today", "Product shelf", "Routine calendar", "Settings"))
+        self.navigation.addItems(
+            ("Today", "Product shelf", "Routine calendar", "Skin tracker", "Settings")
+        )
         self.navigation.setSpacing(6)
         for index in range(self.navigation.count()):
             self.navigation.item(index).setSizeHint(QSize(0, 46))
         side.addWidget(self.navigation)
-        side.addWidget(QLabel("LOCAL & OFFLINE\nPhase 1 · v0.1.0"))
+        side.addWidget(QLabel("LOCAL & OFFLINE\nPhase 2 · v0.2.1"))
         layout.addWidget(sidebar)
         self.stack = QStackedWidget()
-        self.dashboard = DashboardPage(inventory, schedule)
+        safety = SafetyService(database)
+        self.dashboard = DashboardPage(inventory, schedule, safety)
         self.inventory = InventoryPage(inventory)
-        self.calendar = CalendarPage(inventory, schedule)
+        self.calendar = CalendarPage(inventory, schedule, safety)
+        self.tracking = TrackingPage(ObservationService(database))
         for page in (
             self.dashboard,
             self.inventory,
             self.calendar,
+            self.tracking,
             SettingsPage(database, self.settings, self.apply_theme),
         ):
             page.layout().setContentsMargins(28, 24, 28, 24)
@@ -77,9 +87,42 @@ class MainWindow(QMainWindow):
             if dark
             else ("#f6f7f2", "#ffffff", "#263e34", "#61756a", "#dce5dc", "#2b7254", "#e5f0e5")
         )
+        palette = QPalette()
+        roles = {
+            QPalette.ColorRole.Window: bg,
+            QPalette.ColorRole.WindowText: fg,
+            QPalette.ColorRole.Base: card,
+            QPalette.ColorRole.AlternateBase: tint,
+            QPalette.ColorRole.Text: fg,
+            QPalette.ColorRole.Button: card,
+            QPalette.ColorRole.ButtonText: fg,
+            QPalette.ColorRole.Highlight: tint,
+            QPalette.ColorRole.HighlightedText: fg,
+            QPalette.ColorRole.ToolTipBase: card,
+            QPalette.ColorRole.ToolTipText: fg,
+            QPalette.ColorRole.PlaceholderText: muted,
+            QPalette.ColorRole.Link: accent,
+        }
+        for role, color in roles.items():
+            palette.setColor(role, QColor(color))
+        palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, QColor(muted))
+        application = QApplication.instance()
+        application.setPalette(palette)
+        application.styleHints().setColorScheme(
+            Qt.ColorScheme.Dark if dark else Qt.ColorScheme.Light
+        )
         self.setStyleSheet(f"""
             QWidget {{ font-family: 'Segoe UI'; font-size: 13px; color: {fg}; }}
             QMainWindow, QStackedWidget, QDialog {{ background: {bg}; }}
+            QComboBox QAbstractItemView, QCalendarWidget QAbstractItemView {{
+                background-color: {card}; color: {fg};
+                selection-background-color: {tint}; selection-color: {fg};
+            }}
+            QMenu {{ background: {card}; color: {fg}; }}
+            QMenu::item:selected {{ background: {tint}; }}
+            QTabWidget::pane {{ background: {card}; border: 1px solid {edge}; }}
+            QTabBar::tab {{ background: {tint}; color: {fg}; padding: 10px; }}
+            QSpinBox {{ background: {card}; color: {fg}; border: 1px solid {edge}; padding: 6px; }}
             QWidget#sidebar {{ background: {tint}; }}
             QLabel#brand {{ font-size: 30px; font-weight: 700; color: {accent}; }}
             QLabel#pageTitle {{ font-size: 28px; font-weight: 600; }}

@@ -18,8 +18,8 @@ def test_sidebar_search_and_theme(qtbot, db):
     assert window.inventory.products.count() == 1
     window.navigation.setCurrentRow(2)
     assert window.calendar.table.rowCount() == 7
-    window.navigation.setCurrentRow(3)
-    settings = window.stack.widget(3)
+    window.navigation.setCurrentRow(4)
+    settings = window.stack.widget(4)
     settings.dark.setChecked(True)
     assert SettingsService(db).get("theme") == "dark"
     window.navigation.setCurrentRow(0)
@@ -49,7 +49,7 @@ def test_product_form_creates_and_edits_persisted_product(qtbot, inventory):
 def test_dashboard_checkbox_persists_completion(qtbot, db, schedule):
     window = MainWindow(db)
     qtbot.addWidget(window)
-    window.dashboard.period.setCurrentText("AM")
+    window.dashboard.period.setCurrentIndex(0)
     item = window.dashboard.steps.item(0)
     item.setCheckState(Qt.CheckState.Checked)
     assert len(schedule.completed(date.today(), "AM")) == 1

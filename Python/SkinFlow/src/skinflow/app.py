@@ -1,4 +1,4 @@
-"""Desktop entry point. All functionality in Phase 1 is local and offline."""
+"""Desktop entry point. Inventory, schedules, safety, and tracking work offline."""
 
 import argparse
 import logging

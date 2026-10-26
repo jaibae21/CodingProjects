@@ -5,13 +5,14 @@
 Read [README.md](README.md), [Implementation Plan.md](Implementation%20Plan.md), and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing the project.
 The application is a local-first Windows desktop app using Python 3.12+, PySide6,
-SQLAlchemy, SQLite, and Alembic. Phase 1 is implemented; later phases remain planned.
+SQLAlchemy, SQLite, and Alembic. Phases 1–2 are implemented; Phases 3–4 remain planned.
 
 ## Workspace and branch
 
 - Keep this project under `Python/SkinFlow` in the shared CodingProjects repository.
-- The initial development branch is `feature/skinflow-phase-1`. Inspect the current branch
-  and working tree before editing; preserve unrelated changes.
+- The project branch is `feature/skinflow-phase-1`; its name does not limit it to one phase.
+  Keep SkinFlow work on this branch across phases unless the user requests another branch.
+  Inspect the branch and working tree before editing; preserve unrelated changes.
 - Keep changes on the task's development branch. Do not switch branches, commit, merge,
   publish, or start a later phase solely because this guide lists those actions.
 - Keep application data and generated artifacts out of Git. Never commit `.venv`, API keys,
@@ -52,11 +53,18 @@ and GUI interactions. Do not make live API calls during automated tests.
 - Preserve the separation between planned routines and actual completions. Moving or
   rolling back a plan must not move or delete actual completion records.
 - Keep historical labels and product references meaningful after product edits/deletion.
-- Keep weekly edits, monthly additions, and one-off overrides distinct. A date override
-  replaces the full routine for that period; monthly steps otherwise append to the baseline.
+- Support exactly two routine sessions: Morning (`AM`) and Night (`Night`, including evening).
+  Midday/Evening are legacy data aliases only; do not reintroduce them as selectable sessions.
+- Keep weekly edits, monthly rules, and date overrides distinct across the two daily sessions.
+  An override replaces a session. Monthly rules may append/replace, and review-required rules
+  remain reminders until an occurrence is explicitly approved.
+- Keep scalp/shower routines separate from facial routines; a scalp move must not duplicate retinol.
+- Preserve explicit approval, stale-version rejection, and cancellation for treatment/recovery proposals.
+  Skipping a treatment must not reschedule missed actives or erase subsequent manual edits.
 - Save schedule changes and their revisions together. Preserve optimistic version checks
   so a stale editor cannot silently replace a newer plan.
-- Seed only once. Never recreate products a user has deleted or overwrite their edits.
+- Seed each configuration version once. Preserve prior plans as revisions/templates before a
+  requested configuration upgrade. Never recreate deleted products or reset later personal edits.
 - Use SQLite's backup API for active databases. Restore only after closing app connections;
   keep the previous database before replacing it.
 
@@ -66,9 +74,12 @@ Do not invent ingredient lists, concentrations, verification, or usage instructi
 Keep unknown information explicitly unverified. The historical strong peel starts as a
 caution/review reminder, not an automatic recommendation to apply it.
 
-Future safety findings must distinguish established concerns from conservative preferences,
+Safety findings must distinguish established concerns from conservative preferences,
 explain severity and alternatives, and avoid diagnosis or claims of medical causation.
 Keep core inventory and routine management available without internet or AI credentials.
+Read `docs/SAFETY_RULES.md` before changing rule thresholds or evidence categories. Keep user-reported
+tags distinct from label verification. Historical reviews must not use future skin states; logged
+actual exposures must not disappear just because a plan or product status changes.
 
 ## Future AI work
 

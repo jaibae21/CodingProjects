@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "skinflow"
-version = "0.1.0"
+version = "0.2.1"
 description = "Local-first skincare inventory and routine planner for Windows"
 readme = "README.md"
 requires-python = ">=3.12"

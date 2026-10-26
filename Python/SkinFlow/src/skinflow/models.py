@@ -46,6 +46,7 @@ class Product(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(20), default="Active")
     deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    safety_tags: Mapped[dict] = mapped_column(JSON, default=dict)
 
     @property
     def label(self) -> str:
@@ -75,7 +76,7 @@ class Completion(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     day: Mapped[date] = mapped_column(Date)
-    period: Mapped[str] = mapped_column(String(2))
+    period: Mapped[str] = mapped_column(String(20))
     step_id: Mapped[str] = mapped_column(String(100))
     product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id", ondelete="SET NULL"), nullable=True
@@ -89,3 +90,27 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
+
+
+class Observation(Base):
+    __tablename__ = "observations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    region: Mapped[str] = mapped_column(String(120))
+    condition: Mapped[str] = mapped_column(String(40))
+    severity: Mapped[int] = mapped_column(Integer)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    photo_path: Mapped[str] = mapped_column(Text, default="")
+    persistent: Mapped[bool] = mapped_column(Boolean, default=False)
+    painful: Mapped[bool] = mapped_column(Boolean, default=False)
+    infection_concern: Mapped[bool] = mapped_column(Boolean, default=False)
+    resolved_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+class RoutineTemplate(Base):
+    __tablename__ = "routine_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), unique=True)
+    payload: Mapped[dict] = mapped_column(JSON)
